@@ -37,7 +37,7 @@ python3 FOT_toy_example_03.py
 ```
 <img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/toy_example_03.png" height="150" width="600">
 
-### Robot-arm
+[comment]: <> (### Robot-arm)
 
 [comment]: <> (#### Comparison)
 
