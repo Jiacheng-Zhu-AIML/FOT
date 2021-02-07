@@ -1,6 +1,6 @@
 # Functional Optimal Transport
 
-<img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/image_0.png" height="360" width="600">
+<img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/image_0.png" height="300" width="600">
 
 ---
 This repository contains the codebase accompaning the 
