@@ -2,14 +2,12 @@
 
 <img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/image_0.png" height="300" width="600">
 
----
 This repository contains the codebase accompaning the 
 paper "Functional Optimal Transport: Mapping Estimation and Domain Adaptation for Functional data".
 
 
 ## Getting Started
 
----
 #### Basic requirements
 
 ```
@@ -26,7 +24,6 @@ git clone https://github.com/VersElectronics/FOT.git
 
 ## Usage 
 
----
 
 #### File description
 * `fot/FOT_Solver.py`   The FOT solver class
@@ -70,7 +67,6 @@ xxx.py
 
 ## Acknowledgements
 
----
 This repo
 
 * https://github.com/vivienseguy/Large-Scale-OT
