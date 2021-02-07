@@ -27,14 +27,15 @@ git clone https://github.com/VersElectronics/FOT.git
 
 #### File description
 * `fot/FOT_Solver.py`   The FOT solver class
-* `toy_example/`
+* `toy_example/`    Toy examples.
 
 
 ### Run toy examples
 
 ```python
-xxx.py
+python3 FOT_toy_example_03.py
 ```
+<img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/toy_example_3.png.png" height="150" width="500">
 
 ### Robot-arm
 

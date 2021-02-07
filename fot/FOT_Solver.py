@@ -1,12 +1,11 @@
-'''
 
-Investigate the computation issue of the GFOT solver
-
-Accelerate teh algorithms
-
-Try Sinkhorn
-
-'''
+"""
+FOT
+Functional Optimal Transport:
+Mapping Estimation and Domain Adaptation for Functional Data
+Jiacheng Zhu
+jzhu4@andrew.cmu.edu
+"""
 
 import numpy as np
 from matplotlib import pyplot as plt

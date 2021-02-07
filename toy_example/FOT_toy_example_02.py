@@ -1,45 +1,26 @@
-'''
-Toy examples of the Generic Functional Optimal Transport
-
-IL 01:
-Prepare to appear on the paper
-Stochastic Toy Examples: One mixture of sine to One mixture of sine
-
-1. Expand Illustration
-2. Compress Illustration
-3. Parallel Illustration
-4. Change of function characteristics
-
-
-Todo:
-    1. Implement and validate the gradient
-        a. Diagonal case    [Done]
-        b. General case     [Done]
-        c. Compare with Scipy optimization results
-        .
-    2. Think of a better toy example that explores the properties
-        a. Non-GP realizations
-        b. Imbalance dataset
-
-'''
+"""
+FOT
+Functional Optimal Transport:
+Mapping Estimation and Domain Adaptation for Functional Data
+Jiacheng Zhu
+jzhu4@andrew.cmu.edu
+"""
 
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits import mplot3d
 from numpy.linalg import inv
-from numpy.linalg import cholesky, det, lstsq
-from scipy.optimize import minimize
-import scipy
+
+import sys
+sys.path.append("..")
+
+from fot.FOT_Solver import GFOT_optimization, sinkhorn_plan
+from fot.fot_utils import loss_weighted_l2_average, loss_l2_Wasserstein, \
+    plot_origin_domain_data, plot_functions, Generate_Sine_Mixture, plot_origin_domain_data_line
+from fot.learn_kernel import GP_model
 
 from WGPOT.wgpot import expmap, logmap
-
-# Notice: Self defined functions
-from General_Integral_GP_test import GP_model, data_domain_1, data_domain_2
-
-from General_Functional_OT_Optimization import plot_origin_domain_data
-from General_Functional_OT_Optimization import GFOT_optimization, plot_functions, \
-    loss_l2_average, loss_weighted_l2_average, Generate_Sine_Mixture, plot_origin_domain_data_line
+from benchmarks.LSOT_StochasticOTDiscrete import PyTorchStochasticDiscreteOT
 
 
 if __name__ == '__main__':
@@ -55,14 +36,14 @@ if __name__ == '__main__':
     #   GP-like functions are sine functions with noise
     l_num = 16
 
-    mix_ctr_list_1 = [-0.4, 0.4]
-    mix_var_list_1 = [0.2, 0.2]
-    sine_scale_list_1 = [0.5, 0.5]
-    sine_scale_var_list_1 = [0.2, 0.2]
-    sine_amp_list_1 = [0.5, 0.5]
-    sine_amp_var_list_1 = [0.2, 0.2]
-    sine_shift_list_1 = [1, 1]
-    sine_shift_var_list_1 = [0.5, 0.5]
+    mix_ctr_list_1 = [-1]
+    mix_var_list_1 = [1.8]
+    sine_scale_list_1 = [0.4]
+    sine_scale_var_list_1 = [0.2]
+    sine_amp_list_1 = [0.5]
+    sine_amp_var_list_1 = [0.2]
+    sine_shift_list_1 = [0.8]
+    sine_shift_var_list_1 = [0.5]
 
     F1_list, F1_x_list = Generate_Sine_Mixture(mix_center_list=mix_ctr_list_1, mix_var_list=mix_var_list_1,
                                  sine_scale_list=sine_scale_list_1, sine_scale_var_list=sine_scale_var_list_1,
@@ -71,7 +52,7 @@ if __name__ == '__main__':
                                  x_list=x, traj_num=l_num, mix_type='uniform')
 
     k_num = 16
-    mix_ctr_list_2 = [-2.2, 2.2]
+    mix_ctr_list_2 = [-1, 1]
     mix_var_list_2 = [0.3, 0.3]
     sine_scale_list_2 = [0.85, 1.5]
     sine_scale_var_list_2 = [0.5, 0.5]
@@ -278,17 +259,5 @@ if __name__ == '__main__':
     # fig_m = plt.figure(10)
     # plt.imshow(Pi)
     # plt.colorbar()
-    # plt.savefig("ToyExp_viz_matrix_figures/ToyExp_viz_mat_4.png", dpi=600)
+    # plt.savefig("ToyExp_viz_matrix_figures/ToyExp_viz_mat_2.png", dpi=600)
     plt.show()
-
-
-
-
-
-
-
-
-
-
-
-

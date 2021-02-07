@@ -1,58 +1,26 @@
-'''
-Toy examples of the Generic Functional Optimal Transport
-
-IL 01:
-Prepare to appear on the paper
-Stochastic Toy Examples: One mixture of sine to One mixture of sine
-
-1. Expand Illustration
-2. Compress Illustration
-3. Parallel Illustration
-4. Change of function characteristics
-
-IL 02:
-Prepare to appear on the paper
-Stochastic Toy examples: One Mixture of Sines to 2 Mixture of Sines
-
-IL 03:
-
-Prepare to appear on the paper
-Stochastic Toy examples: 2 Mixture of sines to 2 mixture of sines
-
-IL 04:
-
-Prepare to appear on the paper
-Stochastoc Toy examples:
-Comparison between:
-GPOT,
-LSOT,
-FOT(Diag),
-FOT,
-'''
+"""
+FOT
+Functional Optimal Transport:
+Mapping Estimation and Domain Adaptation for Functional Data
+Jiacheng Zhu
+jzhu4@andrew.cmu.edu
+"""
 
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib.gridspec import GridSpec
-from mpl_toolkits import mplot3d
 from numpy.linalg import inv
-from numpy.linalg import cholesky, det, lstsq
-from scipy.optimize import minimize
-import scipy
 
-from WGPOT.wgpot import expmap, logmap
-
-# Notice: Self defined functions
-from General_Integral_GP_test import GP_model, data_domain_1, data_domain_2
-
-from General_Functional_OT_Optimization import plot_origin_domain_data
-from General_Functional_OT_Optimization import GFOT_optimization, plot_functions, \
-    loss_l2_average, loss_weighted_l2_average, Generate_Sine_Mixture, plot_origin_domain_data_line
-
-from LSOT_StochasticOTDiscrete import PyTorchStochasticDiscreteOT
 import sys
 sys.path.append("..")
-from fot.GFOT_Solver_HS import GFOT_optimization, sinkhorn_plan, loss_weighted_l2_average, \
-    loss_l2_Wasserstein, plot_origin_domain_data, plot_functions, Generate_Sine_Mixture, plot_origin_domain_data_line
+
+from fot.FOT_Solver import GFOT_optimization, sinkhorn_plan
+from fot.fot_utils import loss_weighted_l2_average, loss_l2_Wasserstein, \
+    plot_origin_domain_data, plot_functions, Generate_Sine_Mixture, plot_origin_domain_data_line
+from fot.learn_kernel import GP_model
+
+from WGPOT.wgpot import expmap, logmap
+from benchmarks.LSOT_StochasticOTDiscrete import PyTorchStochasticDiscreteOT
+
 
 
 if __name__ == '__main__':
