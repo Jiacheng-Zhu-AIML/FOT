@@ -35,7 +35,7 @@ git clone https://github.com/VersElectronics/FOT.git
 ```python
 python3 FOT_toy_example_03.py
 ```
-<img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/toy_example_3.png" height="150" width="500">
+<img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/toy_example_03.png" height="150" width="500">
 
 ### Robot-arm
 
