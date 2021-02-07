@@ -19,6 +19,15 @@ IL 03:
 Prepare to appear on the paper
 Stochastic Toy examples: 2 Mixture of sines to 2 mixture of sines
 
+IL 04:
+
+Prepare to appear on the paper
+Stochastoc Toy examples:
+Comparison between:
+GPOT,
+LSOT,
+FOT(Diag),
+FOT,
 '''
 
 import numpy as np
@@ -39,6 +48,12 @@ from General_Functional_OT_Optimization import plot_origin_domain_data
 from General_Functional_OT_Optimization import GFOT_optimization, plot_functions, \
     loss_l2_average, loss_weighted_l2_average, Generate_Sine_Mixture, plot_origin_domain_data_line
 
+from LSOT_StochasticOTDiscrete import PyTorchStochasticDiscreteOT
+import sys
+sys.path.append("..")
+from fot.GFOT_Solver_HS import GFOT_optimization, sinkhorn_plan, loss_weighted_l2_average, \
+    loss_l2_Wasserstein, plot_origin_domain_data, plot_functions, Generate_Sine_Mixture, plot_origin_domain_data_line
+
 
 if __name__ == '__main__':
 
@@ -51,7 +66,7 @@ if __name__ == '__main__':
     # Notice: Sample the source domain data
     #   Generated from a mixture of GP-like functions
     #   GP-like functions are sine functions with noise
-    l_num = 10
+    l_num = 12
 
     mix_ctr_list_1 = [-0.5, 0.5]
     mix_var_list_1 = [0.2, 0.2]
@@ -68,8 +83,8 @@ if __name__ == '__main__':
                                  sine_shift_list=sine_shift_list_1, sine_shift_var_list=sine_shift_var_list_1,
                                  x_list=x, traj_num=l_num, mix_type='uniform')
 
-    k_num = 10
-    mix_ctr_list_2 = [-1.5, 1.5]
+    k_num = 12
+    mix_ctr_list_2 = [-1, 2]
     mix_var_list_2 = [0.3, 0.3]
     sine_scale_list_2 = [1.0, 1.0]
     sine_scale_var_list_2 = [1.0, 1.0]
@@ -147,16 +162,79 @@ if __name__ == '__main__':
     # Notice: Do the optimization
     lr_A = 0.0004
     lr_Pi = 0.00001
-    ite_num = 1000
+    ite_num = 500
     A_mat, Pi = GFOT_optimizer.Optimize(lr_A=lr_A, lr_Pi=lr_Pi, tho=1e-5,
                                         diagonal=False, max_iteration=ite_num,
                                         entropy=True, fix_Pi=False,
                                         inequality=False)
+
+    # Notice: #####################Do the FOT (Diag)####################
+    GFOT_optimizer_Diag = GFOT_optimization(F1_list=F1_list, F2_list=F2_list,
+                                       V=V, U=U, l_num=l_num, k_num=k_num, data_len=data_len)
+
+    # Notice: Use the same initial
+    GFOT_optimizer_Diag.Set_Initial_Variables(ini_A=ini_A, ini_Pi=ini_Pi,
+                                         ini_lbd_k=lbd_k, ini_lbd_l=lbd_l,
+                                         ini_lbd_i=lbd_i, s_mat=s_mat)
+
+    # Notice: Use the same parameters
+    GFOT_optimizer_Diag.Set_Parameters(rho_k=rho_k, rho_l=rho_l, rho_i=rho_i,
+                                  gamma_A=gamma_A, gamma_h=gamma_h,
+                                  gamma_power=gamma_power, l_power=l_power)
+
+    A_mat_daig, Pi_diag = GFOT_optimizer_Diag.Optimize(lr_A=lr_A, lr_Pi=lr_Pi, tho=1e-5,
+                                        diagonal=True, max_iteration=ite_num,
+                                        entropy=True, fix_Pi=False,
+                                        inequality=False)
+
+    # Notice: ################# Do the LSOT ###########################
+    index_src = np.concatenate(F1_x_list)
+    n_my = l_num * data_len
+    src_X = np.concatenate(F1_list)
+    src_w = np.ones(n_my, ) / n_my
+
+    tgt_X = np.concatenate(F2_list)
+    tgt_w = np.ones(n_my, ) / n_my
+
+    # Notice: Dual OT Stochastic Optimization (alg.1 of ICLR 2018 paper "Large-Scale Optimal Transport and Mapping Estimation")
+    reg_val = 0.02
+    reg_type = 'l2'
+    device_type = 'cpu'
+    device_index = 0
+
+    discreteOTComputer = PyTorchStochasticDiscreteOT(src_X, src_w, tgt_X, tgt_w, reg_type, reg_val, device_type=device_type,
+                                                     device_index=device_index)
+    history = discreteOTComputer.learn_OT_dual_variables(epochs=200, batch_size=50, lr=0.0005)
+
+    # Compute the reg-OT objective
+    d_stochastic = discreteOTComputer.compute_OT_MonteCarlo(epochs=20, batch_size=50)
+
+    # Learn Barycentric Mapping (alg.2 of ICLR 2018 paper "Large-Scale Optimal Transport and Mapping Estimation")
+    bp_history = discreteOTComputer.learn_barycentric_mapping(epochs=300, batch_size=50, lr=0.000002)
+    xsf = discreteOTComputer.evaluate_barycentric_mapping(src_X)
+
+    # print('xsf.shape = ', xsf.shape)
+
+    xsf_reshaped = xsf.reshape((-1, data_len))  # (l_num, data_len)
+
+    # Notice: ################Conduct the Mapping########################
+
     # Notice: Conduct the GFOT
     GFOT_f_shp_list = []
     for f1 in F1_list:
         f1_sharp_fot = V @ A_mat @ U.T @ f1
         GFOT_f_shp_list.append(f1_sharp_fot)
+
+    # Notice: Conduct the GFOT(Diag)
+    GFOT_Diag_f_shp_list = []
+    for f1 in F1_list:
+        f1_Diag_sharp_fot = V @ A_mat_daig @ U.T @ f1
+        GFOT_Diag_f_shp_list.append(f1_Diag_sharp_fot)
+
+    # Notice: Conduct the LSOT
+    LSOT_f_shp_list = []
+    for l in range(l_num):
+        LSOT_f_shp_list.append(xsf_reshaped[l, :])
 
     # Notice: Conduct the GPOT
     v_mu, v_T = logmap(mu_2, K_2, mu_1, K_1)
@@ -165,19 +243,33 @@ if __name__ == '__main__':
         f1_sharp_gpot, _ = expmap(f1, K_1, v_mu, v_T)
         GPOT_f_shp_list.append(f1_sharp_gpot)
 
+
     # Notice: Compute the loss
+
     gfot_loss = loss_weighted_l2_average(F2_list, GFOT_f_shp_list, Pi)
     gfot_loss_nmlzd = gfot_loss/data_len
-    print('np.sum(Pi) =', np.sum(Pi))
     print('gfot_loss_nmlzd =', gfot_loss_nmlzd)
+
+    gfot_diag_loss = loss_weighted_l2_average(F2_list, GFOT_Diag_f_shp_list, Pi)
+    gfot_diag_loss_nmlzd = gfot_diag_loss / data_len
+    print('gfot_diag_loss_nmlzd =', gfot_diag_loss_nmlzd)
 
     gp_coupling = np.ones_like(Pi)/l_num
     gpot_loss = loss_weighted_l2_average(F2_list, GPOT_f_shp_list, gp_coupling)
     gpot_loss_nmlzd = gpot_loss/data_len
-    print('np.sum(gp_coupling) =', np.sum(gp_coupling))
     print('gpot_loss_nmlzd =', gpot_loss_nmlzd)
 
+    lsot_loss = loss_weighted_l2_average(F2_list, LSOT_f_shp_list, gp_coupling)
+    lsot_loss_nmlzd = lsot_loss/data_len
+    print('lsot_loss_nmlzd =', lsot_loss_nmlzd)
+
+    print()
+    print('np.sum(Pi) =', np.sum(Pi))
+    print('np.sum(gp_coupling) =', np.sum(gp_coupling))
+
+
     # Notice: #####################PLOT####################
+    #   Here, illustrate the difference of 4 maps
     plot_x_low = x_start - 1
     plot_x_high = x_end + 1
 
@@ -189,88 +281,104 @@ if __name__ == '__main__':
     #   "The first one"
     figure_first = plt.figure(11)
     figure_first.tight_layout()
-    gs = GridSpec(1, 5)
 
-    ax1 = figure_first.add_subplot(gs[0, 0:2])
-    plot_origin_domain_data_line(ax1, x, F1_list, marker='s',
+    plot_origin_domain_data_line(plt, x, F1_list, marker='s',
                                 color='r', label='F1, source', alpha=0.99,
                                  linewidth=1.5, markersize=5)
 
-    plot_origin_domain_data_line(ax1, x, F2_list, marker='o',
+    plot_origin_domain_data_line(plt, x, F2_list, marker='o',
                                 color='b', label='F2, target', alpha=0.99,
                                  linewidth=1.5, markersize=5)
 
     diag = np.sqrt(np.diag(K_1))
     diag2 = np.sqrt(np.diag(K_2))
     # plt.plot(X_test, mu_1, c='r', label='Mean')
-    ax1.fill_between(X_test[:, 0], (mu_1 + diag ** 0.5)[:, 0], (mu_1 - diag ** 0.5)[:, 0],
+    plt.fill_between(X_test[:, 0], (mu_1 + diag ** 0.5)[:, 0], (mu_1 - diag ** 0.5)[:, 0],
                      alpha=0.4, color='pink')
 
     # plt.plot(X_test, mu_2, c='b', label='Mean')
-    ax1.fill_between(X_test[:, 0], (mu_2 + diag2 ** 0.5)[:, 0], (mu_2 - diag2 ** 0.5)[:, 0],
+    plt.fill_between(X_test[:, 0], (mu_2 + diag2 ** 0.5)[:, 0], (mu_2 - diag2 ** 0.5)[:, 0],
                      alpha=0.4, color='aqua')
 
-    ax1.set_xlim([plot_x_low, plot_x_high])
-    ax1.set_ylim([plot_y_low, plot_y_high])
-    ax1.legend()
+    plt.xlim([plot_x_low, plot_x_high])
+    plt.ylim([plot_y_low, plot_y_high])
+    plt.legend()
 
     # Notice: 2D plot
-    #   Plot the mapping,
     #   "The second one"
-    # figure_second = plt.figure(12)
-    ax2 = figure_first.add_subplot(gs[0, 2])
-    # Get the source mean vector
-    src_data = np.concatenate(F1_list, axis=1)
-    # print(src_data)
-    # print('src_data.shape =', src_data.shape)   # (data_len, l_num)
-    # Get the mapped data vector
-    mpd_data = np.concatenate(GFOT_f_shp_list, axis=1)
-    # print('mpd_data.shape =', mpd_data.shape)   # (data_len, l_num)
-    src_mean = np.mean(src_data, axis=0, keepdims=1)
-    mpd_mean = np.mean(mpd_data, axis=0, keepdims=1)
-    mapping_value = np.concatenate([src_mean, mpd_mean], axis=0).T    # (l_num, 2)
-    # print('mapping_value.shape =', mapping_value.shape)
-    # print('mapping_value =', mapping_value)
+    #   Plot the FOT result
+    figure_second = plt.figure(12)
 
-    for l in range(l_num):
-        ax2.plot([0, 1], mapping_value[l, :], c='orange',
-                 linewidth=3, marker='>', markersize=10)
-
-    ax2.set_xlim([-0.1, 1.1])
-    ax2.set_ylim([plot_y_low, plot_y_high])
-
-    # Notice: Give the 2D plot
-    #   The original data and the pushforward result
-    #   "The third one"
-    # figure_2d = plt.figure(13)
-    ax3 = figure_first.add_subplot(gs[0, 3:])
-    plot_origin_domain_data(ax3, x, F1_list, marker='s',
+    plot_origin_domain_data(plt, x, F1_list, marker='s',
                             color='r', label='F1, source', alpha=0.3, s=10)
 
-    plot_origin_domain_data(ax3, x, F2_list, marker='o',
+    plot_origin_domain_data(plt, x, F2_list, marker='o',
                             color='b', label='F2, target', alpha=0.3, s=10)
 
     #  Notice: The mapped data by FOT
-    plot_functions(ax3, X_test, GFOT_f_shp_list, "FOT", "orange", 0.9, linewidth=3)
-    # notice: The mapped data by GPOT
-    plot_functions(ax3, X_test, GPOT_f_shp_list, "GPOT", "lime", 0.4)
+    plot_functions(plt, X_test, GFOT_f_shp_list, "FOT", "orange", 0.9, linewidth=3)
+    plt.xlim([plot_x_low, plot_x_high])
+    plt.ylim([plot_y_low, plot_y_high])
+    plt.legend()
 
-    # Notice: Visualize the learned kernel
-    diag = np.sqrt(np.diag(K_1))
-    diag2 = np.sqrt(np.diag(K_2))
-    # plt.plot(X_test, mu_1, c='r', label='Mean')
-    ax3.fill_between(X_test[:, 0], (mu_1 + diag**0.5)[:, 0], (mu_1 - diag**0.5)[:, 0], alpha=0.2, color='pink')
+    # Notice: 2D plot
+    #   "The Third one"
+    #   Plot the FOT (Diag) result
+    figure_third = plt.figure(13)
 
-    # plt.plot(X_test, mu_2, c='b', label='Mean')
-    ax3.fill_between(X_test[:, 0], (mu_2 + diag2**0.5)[:, 0], (mu_2 - diag2**0.5)[:, 0], alpha=0.2, color='aqua')
-    ax3.set_xlim([plot_x_low, plot_x_high])
-    ax3.set_ylim([plot_y_low, plot_y_high])
-    ax3.legend()
+    plot_origin_domain_data(plt, x, F1_list, marker='s',
+                            color='r', label='F1, source', alpha=0.3, s=10)
+
+    plot_origin_domain_data(plt, x, F2_list, marker='o',
+                            color='b', label='F2, target', alpha=0.3, s=10)
+
+    plot_functions(plt, X_test, GFOT_Diag_f_shp_list, "FOT(Diag)", "tan", 0.9, linewidth=3)
+    plt.xlim([plot_x_low, plot_x_high])
+    plt.ylim([plot_y_low, plot_y_high])
+    plt.legend()
+
+    # Notice: 2D plot
+    #   "The Forth one"
+    #   Plot the GPOT result
+    figure_forth = plt.figure(14)
+
+    plot_origin_domain_data(plt, x, F1_list, marker='s',
+                            color='r', label='F1, source', alpha=0.3, s=10)
+
+    plot_origin_domain_data(plt, x, F2_list, marker='o',
+                            color='b', label='F2, target', alpha=0.3, s=10)
+
+    plot_functions(plt, X_test, GPOT_f_shp_list, "GPOT", "Green", 0.9, linewidth=3)
+    plt.xlim([plot_x_low, plot_x_high])
+    plt.ylim([plot_y_low, plot_y_high])
+    plt.legend()
+
+    # Notice: 2D plot
+    #   "The Forth one"
+    #   Plot the GPOT result
+    figure_fifth = plt.figure(15)
+
+    plot_origin_domain_data(plt, x, F1_list, marker='s',
+                            color='r', label='F1, source', alpha=0.3, s=10)
+
+    plot_origin_domain_data(plt, x, F2_list, marker='o',
+                            color='b', label='F2, target', alpha=0.3, s=10)
+
+    plot_functions(plt, X_test, LSOT_f_shp_list, "LSOT", "violet", 0.9, linewidth=3)
+    plt.xlim([plot_x_low, plot_x_high])
+    plt.ylim([plot_y_low, plot_y_high])
+    plt.legend()
+
 
     # Notice: Visualize the Pi
     fig_m = plt.figure(10)
     plt.imshow(Pi)
     plt.colorbar()
+
+    fig_A = plt.figure(999999)
+    plt.imshow(A_mat)
+    plt.colorbar()
+
     plt.show()
 
 

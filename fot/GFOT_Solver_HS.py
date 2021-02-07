@@ -1,28 +1,10 @@
 '''
-Experiments on (The Generic Functional Optimal Transport)
-of GP mapping
 
-According to the derivation of gradients.
-Validate the derived gradient of A and Pi
+Investigate the computation issue of the GFOT solver
 
-This is the main file that contains all the
-utils functions and the GFOT solver
+Accelerate teh algorithms
 
-Notice:
-    need to put the optimizer together (Done)
-
-Todo:
-    1. Implement and validate the gradient
-        a. Diagonal case    (Computational done, more derivative are needed)
-        b. General case     (Done)
-        c. Compare with Scipy optimization results  (Still need it?)
-        .
-    2. Think of a better toy example that explores the properties
-        a. Population of Parallel lines
-        b. Piecewise lines
-        c. Non-GP realizations
-        d. Imbalance dataset
-        (Straight lines, piece wise and GP mixtures should be enough)
+Try Sinkhorn
 
 '''
 
@@ -32,9 +14,10 @@ from numpy.linalg import inv
 from numpy.linalg import cholesky, det, lstsq
 from scipy.optimize import minimize
 import scipy
+import time
 
 # Notice: Self defined functions
-from General_Integral_GP_test import GP_model, data_domain_1, data_domain_2
+# from General_Integral_GP_test import GP_model, data_domain_1, data_domain_2
 
 
 # Notice:
@@ -127,7 +110,7 @@ class GFOT_optimization:
         :param rho_l: (l_num,); hyper parameter of equality constraint for Pi
         :param rho_i: scalar; hyper parameter of inequality constraint for Pi
         :param gamma_A: scalar; hyper parameter of A
-        :param gamma_h: scalar; hyper parameter of entropy
+        :param gamma_h: scalar; hyper parameter of entropy. the 1 / lambda in sinkhorn
         :param gamma_power: scalar; hyper parameter of power regularizer
         :param l_power: scalar, to regularize, let gamma_power > 0 and l < 1; or gamma_power <0 and l > 1;
         :return:
@@ -142,7 +125,7 @@ class GFOT_optimization:
 
     # Notice: Do the optimization
     def Optimize(self, lr_A, lr_Pi, tho, diagonal=False, max_iteration=50, entropy=False,
-                        fix_Pi=False, inequality=False, multi_output=False):
+                        fix_Pi=False, inequality=False, multi_output=False, sinkhorn=False):
 
         self.lr_A = lr_A
         self.lr_Pi = lr_Pi
@@ -151,9 +134,12 @@ class GFOT_optimization:
         self.fix_Pi = fix_Pi
         self.inequality = inequality
         self.multi_output = multi_output    # Notice: Important! It will affect the computing procedure
+        self.sinkhorn = sinkhorn
 
         # Notice: get the initial objective value
         objective_value = self.Objective_Function()
+        self._Pi_brutal_step_time_list = []
+        self._Pi_sinkhorn_step_time_list = []
 
         # Notice: Iterate
         for i in range(max_iteration):
@@ -165,6 +151,8 @@ class GFOT_optimization:
                 grad_A = np.zeros((self.data_len * self.Y_dim, self.data_len * self.Y_dim))
             else:
                 grad_A = np.zeros((self.data_len, self.data_len))
+
+            brutal_A_time_start = time.time()
             for l in range(self.l_num):
                 for k in range(self.k_num):
                     # Notice: Compute the d C_lk / dA \in R{nxn}
@@ -179,6 +167,38 @@ class GFOT_optimization:
                     grad_A = grad_A + self.Pi[l, k] * d_C_lk
 
             grad_A += 2 * self.gamma_A * self.A
+            brutal_A_time_end = time.time() - brutal_A_time_start
+
+            # Notice: 12/06/2020: Vectorized grad A
+            #   1. Obtain AUTF = A @ U.T @ F, where F \in R^{data_len, l_mun
+            vector_A_time_start = time.time()
+            F_mat = np.squeeze(np.asarray(self.F1_list)).T
+            # Notice: 2. VTG = V.T @ G, where G \in R^{data_len, k_num}
+            G_mat = np.squeeze(np.asarray(self.F2_list)).T
+            AUTF = self.A @ self.U.T @ F_mat
+            VTG = self.V.T @ G_mat
+            AUTF_tsr = np.expand_dims(AUTF.T, axis=1)
+            VTG_tsr = np.expand_dims(VTG.T, axis=0)
+            AUTF_tsr_tle = np.tile(AUTF_tsr, (1, self.k_num, 1))
+            VTG_tsr_tle = np.tile(VTG_tsr, (self.l_num, 1, 1))
+            diff_tsr = AUTF_tsr_tle - VTG_tsr_tle
+
+            FT_tsr_tle = np.tile(F_mat.T[:, None, :], (1, self.k_num, 1))
+            diffF = np.einsum("lkn,lkm->lknm", diff_tsr, FT_tsr_tle)  # (A@U^T@f_1 - V^T@f_2)@f_1^T
+            U_tsr = self.U[None, None, :, :]
+            U_tsr_tle = np.tile(U_tsr, (self.l_num, self.k_num, 1, 1))
+            M_tsr = np.einsum("lkan,lknb->lkab", diffF, U_tsr_tle)
+            grad_A_vctr = np.einsum("lk, lknm->nm", self.Pi, M_tsr)
+            grad_A_vctr += 2 * self.gamma_A * self.A
+            vector_A_time_end = time.time() - vector_A_time_start
+
+            print("brutal_A_time_end =", brutal_A_time_end)
+            print("vector_A_time_end =", vector_A_time_end)
+
+            # print("grad_A_vctr =")
+            # print(grad_A_vctr)
+            # print("grad_A =")
+            # print(grad_A)
 
             # Notice: consider whether A is diagonal gradient
             if diagonal:
@@ -189,7 +209,26 @@ class GFOT_optimization:
 
             if self.fix_Pi:
                 continue
+            elif self.sinkhorn:
+                # Notice: Test the Sinkhorn algorithm here
+                sinkhorn_time_start = time.time()
+                cost_matrix = self.Cost_Matrix(A=self.A, U=self.U, V=self.V)
+                # Notice:
+                #   Get the marginal distribution.
+                #   Also, modify here
+                # u_l = np.ones((self.l_num)) / self.k_num
+                # u_k = np.ones((self.k_num)) / self.l_num
+                u_l = np.ones((self.l_num))
+                u_k = np.ones((self.k_num))
+                sinkhorn_Pi, _ = sinkhorn_plan(cost_matrix=cost_matrix,
+                                               r=u_l, c=u_k, lam=1 / self.gamma_h,
+                                               epsilon=0.001)
+                self.sinkhorn_Pi = sinkhorn_Pi
+                sinkhorn_time_took = time.time() - sinkhorn_time_start
+                print("sinkhorn_time_took =", sinkhorn_time_took)
+                self._Pi_sinkhorn_step_time_list.append(sinkhorn_time_took)
             else:
+                brutal_time_start = time.time()
                 # Notice: Update the Pi matrix
                 # print('update Pi')
                 last_cost = objective_value
@@ -199,14 +238,17 @@ class GFOT_optimization:
                 #  minimizes the current objective function
                 #   Todo: modify it to be a <for iteration>
                 # print('self.Pi =', self.Pi)
-                while cost_difference > 0.01:
+                while cost_difference > 0.001:
 
                     grad_Pi = np.zeros((self.l_num, self.k_num))
+                    # Notice: Multithread/Multiprocess here?
                     for l in range(self.l_num):
                         for k in range(self.k_num):
                             d_pi_lk = C_matrix_temp[l, k] + self.lbd_k[k] + self.lbd_l[l]
                             d_pi_lk += 1 * self.rho_k[k] * np.sum(self.Pi[:, k])
                             d_pi_lk += 1 * self.rho_l[l] * np.sum(self.Pi[l, :])
+                            # Notice: The following line is the difference
+                            # d_pi_lk += - 1 * (self.rho_k[k]/self.k_num + self.rho_l[l]/self.l_num) * self.Pi[l, k]
                             d_pi_lk += - 1 * (self.rho_k[k] + self.rho_l[l]) * self.Pi[l, k]
                             d_pi_lk += self.gamma_power * (self.Pi[l, k]**(self.l_power - 1))
                             if self.entropy:
@@ -219,6 +261,10 @@ class GFOT_optimization:
                     Pi_temp = self.Pi - self.lr_Pi * grad_Pi
                     # # Notice: The boundary is applied here
                     if not self.inequality:
+                        # Notice: also the difference here
+                        # print("np.max(Pi_temp) =", np.max(Pi_temp))
+                        # print("1/(self.l_num * self.k_num)) =", 1/(self.l_num * self.k_num))
+                        # if (np.max(Pi_temp) >= (1/(self.l_num * self.k_num))) or (np.min(Pi_temp) <= 0):
                         if (np.max(Pi_temp) >= 1.0) or (np.min(Pi_temp) <= 0):
                             break
                         else:
@@ -229,13 +275,24 @@ class GFOT_optimization:
                     # Notice: Terminate this update if found the
                     cost_temp = self.Objective_Function()
                     cost_difference = np.abs(last_cost - cost_temp)
+                    # print("cost_difference =", cost_difference)
                     last_cost = cost_temp
 
+                brutal_time_took = time.time() - brutal_time_start
+                print("brutal_time_took =", brutal_time_took)
+                self._Pi_brutal_step_time_list.append(brutal_time_took)
+
             # Notice: update the multipliers
+            #   Here is the difference
             self.lbd_k = self.lbd_k + np.multiply(self.rho_k, np.sum(self.Pi, axis=0) - 1)
             self.lbd_l = self.lbd_l + np.multiply(self.rho_l, np.sum(self.Pi, axis=1) - 1)
             self.lbd_i = self.lbd_i + self.rho_i * (self.Pi - self.s_mat)
 
+            print("At this iteration, self.Pi =")
+            print(self.Pi)
+
+        if self.sinkhorn:
+            self.Pi = self.sinkhorn_Pi
         print('Optimization Ended')
         print("self.A = ")
         print(self.A)
@@ -244,11 +301,44 @@ class GFOT_optimization:
         print("self.Objective_Function()")
         print(self.Objective_Function())
 
+        print("Sum brutal_time_took =", np.sum(self._Pi_brutal_step_time_list))
+        print("Sum sinkhorn_time_took =", np.sum(self._Pi_sinkhorn_step_time_list))
         return self.A, self.Pi
 
     # Notice: Just some function
     def Somefunction(self):
         return
+
+# Notice: The Sinkhorn solver
+def sinkhorn_plan(cost_matrix, r, c, lam, epsilon=1e-5):
+    """
+    Computes the optimal transport matrix and Slinkhorn distance using the
+    Sinkhorn-Knopp algorithm
+    Inputs:
+        - M : cost matrix (n x m)
+        - r : vector of marginals (n, )
+        - c : vector of marginals (m, )
+        - lam : strength of the entropic regularization
+        - epsilon : convergence parameter
+    Output:
+        - P : optimal transport matrix (n x m)
+        - dist : Sinkhorn distance
+    """
+    # print("In skh alg")
+    # print("cost_matrix.shape =", cost_matrix.shape)
+    # print("r.shape =", r.shape)
+    # print("c.shape =", c.shape)
+
+    n, m = cost_matrix.shape
+    P = np.exp(- lam * cost_matrix)
+    P /= P.sum()
+    u = np.zeros(n)
+    # normalize this matrix
+    while np.max(np.abs(u - P.sum(1))) > epsilon:
+        u = P.sum(1)
+        P *= (r / u).reshape((-1, 1))
+        P *= (c / P.sum(0)).reshape((1, -1))
+    return P, np.sum(P * cost_matrix)
 
 
 # notice: Used to plot the origin data
@@ -313,6 +403,31 @@ def loss_weighted_l2_average(data_list_1, data_list_2, coupling):
             c = np.sum(np.square(data_list_1[i] - data_list_2[j]))
             loss_mat[i, j] = c
     # print('loss_mat =', loss_mat)
+    return np.sum(np.multiply(loss_mat, coupling))
+
+
+# Notice: Obtain the wasserstein distance with l2 ground metrix
+def loss_l2_Wasserstein(data_list_1, data_list_2, lam=1.0/40, epsilon=1e-3):
+    """
+    :param data_list_1: A list of arrays
+    :param data_list_2: A list of nd arrays
+    :param lam: The coefficient of entropy
+    :return: The W-distance: <Pi, C>_F
+    """
+    data_num_1 = len(data_list_1)
+    data_num_2 = len(data_list_2)
+    loss_mat = np.zeros((data_num_1, data_num_2))
+    for i in range(data_num_1):
+        for j in range(data_num_2):
+            c = np.sum(np.square(data_list_1[i] - data_list_2[j]))
+            loss_mat[i, j] = c
+    # print('loss_mat =', loss_mat)
+    # Notice: Then obtain the w-distance
+    r_marginal = np.ones(data_num_1)
+    c_marginal = np.ones(data_num_2)
+    # print("loss_mat =", loss_mat)
+    coupling, w_loss = sinkhorn_plan(loss_mat, r_marginal, c_marginal, lam, epsilon=epsilon)
+    # print("w_loss =", w_loss)
     return np.sum(np.multiply(loss_mat, coupling))
 
 

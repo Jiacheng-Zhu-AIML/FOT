@@ -10,10 +10,6 @@ Stochastic Toy Examples: One mixture of sine to One mixture of sine
 3. Parallel Illustration
 4. Change of function characteristics
 
-IL 02:
-Prepare to appear on the paper
-Stochastic Toy examples: Mixture of Sines to Mixture of Sines
-
 
 Todo:
     1. Implement and validate the gradient
@@ -59,9 +55,9 @@ if __name__ == '__main__':
     #   GP-like functions are sine functions with noise
     l_num = 16
 
-    mix_ctr_list_1 = [0]
-    mix_var_list_1 = [0.2]
-    sine_scale_list_1 = [0.5]
+    mix_ctr_list_1 = [-1]
+    mix_var_list_1 = [1.8]
+    sine_scale_list_1 = [0.4]
     sine_scale_var_list_1 = [0.2]
     sine_amp_list_1 = [0.5]
     sine_amp_var_list_1 = [0.2]
@@ -75,14 +71,14 @@ if __name__ == '__main__':
                                  x_list=x, traj_num=l_num, mix_type='uniform')
 
     k_num = 16
-    mix_ctr_list_2 = [-1.3, 1.3]
-    mix_var_list_2 = [0.3, 0.3]
-    sine_scale_list_2 = [1.0, 1.0]
-    sine_scale_var_list_2 = [1.0, 1.0]
-    sine_amp_list_2 = [0.4, 0.4]
-    sine_amp_var_list_2 = [0.3, 0.3]
-    sine_shift_list_2 = [1, 1]
-    sine_shift_var_list_2 = [0.5, 0.5]
+    mix_ctr_list_2 = [0]
+    mix_var_list_2 = [0.2]
+    sine_scale_list_2 = [1.2]
+    sine_scale_var_list_2 = [0.3]
+    sine_amp_list_2 = [0.6]
+    sine_amp_var_list_2 = [0.3]
+    sine_shift_list_2 = [1.2]
+    sine_shift_var_list_2 = [0.5]
 
     F2_list, F2_x_list = Generate_Sine_Mixture(mix_center_list=mix_ctr_list_2, mix_var_list=mix_var_list_2,
                                                sine_scale_list=sine_scale_list_2,
@@ -126,7 +122,7 @@ if __name__ == '__main__':
 
     # notice: Set initial values
     ini_A = np.eye(data_len)
-    ini_Pi = 1.0 / (l_num * k_num) * np.ones((l_num, k_num))
+    ini_Pi = 0.9 * 1.0 / (l_num * k_num) * np.ones((l_num, k_num))
     # ini_Pi = np.eye(l_num)
 
     lbd_k = 100 * np.ones((k_num,))
@@ -144,6 +140,7 @@ if __name__ == '__main__':
     rho_i = 10
     gamma_h = 40
     gamma_A = 0.001
+    # gamma_power = -10
     gamma_power = -10
     l_power = 3
     GFOT_optimizer.Set_Parameters(rho_k=rho_k, rho_l=rho_l, rho_i=rho_i,
@@ -193,92 +190,96 @@ if __name__ == '__main__':
     # Notice: 2D plot
     #   Just the Original Data
     #   "The first one"
-    figure_first = plt.figure(11)
-    figure_first.tight_layout()
-    gs = GridSpec(1, 5)
+    figure_first = plt.figure(11, figsize=(12, 3))
+    gs = GridSpec(1, 11)
 
-    ax1 = figure_first.add_subplot(gs[0, 0:2])
-    plot_origin_domain_data_line(ax1, x, F1_list, marker='s',
-                                color='r', label='F1, source', alpha=0.99,
-                                 linewidth=1.5, markersize=5)
-
-    plot_origin_domain_data_line(ax1, x, F2_list, marker='o',
-                                color='b', label='F2, target', alpha=0.99,
-                                 linewidth=1.5, markersize=5)
-
-    diag = np.sqrt(np.diag(K_1))
-    diag2 = np.sqrt(np.diag(K_2))
-    # plt.plot(X_test, mu_1, c='r', label='Mean')
-    ax1.fill_between(X_test[:, 0], (mu_1 + diag ** 0.5)[:, 0], (mu_1 - diag ** 0.5)[:, 0],
-                     alpha=0.4, color='pink')
-
-    # plt.plot(X_test, mu_2, c='b', label='Mean')
-    ax1.fill_between(X_test[:, 0], (mu_2 + diag2 ** 0.5)[:, 0], (mu_2 - diag2 ** 0.5)[:, 0],
-                     alpha=0.4, color='aqua')
+    ax1 = figure_first.add_subplot(gs[0, 0:3])
+    plot_origin_domain_data_line(plt, x, F1_list, marker=None,
+                                 color='r', label='Source', alpha=0.99,
+                                 linewidth=2, markersize=5)
+    plot_origin_domain_data_line(plt, x, F2_list, marker=None,
+                                 color='b', label='Target', alpha=0.99,
+                                 linewidth=2, markersize=5)
 
     ax1.set_xlim([plot_x_low, plot_x_high])
     ax1.set_ylim([plot_y_low, plot_y_high])
     ax1.legend()
+    ax1.set_xticks([])
+    ax1.set_yticks([])
 
     # Notice: 2D plot
     #   Plot the mapping,
     #   "The second one"
     # figure_second = plt.figure(12)
-    ax2 = figure_first.add_subplot(gs[0, 2])
+    ax2 = figure_first.add_subplot(gs[0, 3])
     # Get the source mean vector
     src_data = np.concatenate(F1_list, axis=1)
-    # print(src_data)
-    # print('src_data.shape =', src_data.shape)   # (data_len, l_num)
-    # Get the mapped data vector
     mpd_data = np.concatenate(GFOT_f_shp_list, axis=1)
     # print('mpd_data.shape =', mpd_data.shape)   # (data_len, l_num)
     src_mean = np.mean(src_data, axis=0, keepdims=1)
     mpd_mean = np.mean(mpd_data, axis=0, keepdims=1)
     mapping_value = np.concatenate([src_mean, mpd_mean], axis=0).T    # (l_num, 2)
-    # print('mapping_value.shape =', mapping_value.shape)
-    # print('mapping_value =', mapping_value)
 
     for l in range(l_num):
-        ax2.plot([0, 1], mapping_value[l, :], c='orange',
-                 linewidth=3, marker='>', markersize=10)
+        dplacm_y_start = mapping_value[l, 0]
+        dplacm_y_end = mapping_value[l, 1]
+        # plt.plot([0, 1], mapping_value[l, :], c='orange',
+        #          linewidth=3, marker='>', markersize=10)
+        ax2.arrow(x=0, y=dplacm_y_start, dx=1, dy=dplacm_y_end - dplacm_y_start,
+                  color='orange', width=0.04, head_width=0.15, head_length=0.3)
+        # ax2.plot([0, 1], mapping_value[l, :], c='orange',
+        #         linewidth=3, marker='>', markersize=10)
 
-    ax2.set_xlim([-0.1, 1.1])
+    ax2.set_xlim([-0.1, 1.3])
     ax2.set_ylim([plot_y_low, plot_y_high])
+    ax2.set_xticks([])
+    ax2.set_yticks([])
 
     # Notice: Give the 2D plot
     #   The original data and the pushforward result
     #   "The third one"
     # figure_2d = plt.figure(13)
-    ax3 = figure_first.add_subplot(gs[0, 3:])
+    ax3 = figure_first.add_subplot(gs[0, 4:7])
     plot_origin_domain_data(ax3, x, F1_list, marker='s',
-                            color='r', label='F1, source', alpha=0.3, s=10)
+                            color='r', label='Source', alpha=0.15, s=6)
 
     plot_origin_domain_data(ax3, x, F2_list, marker='o',
-                            color='b', label='F2, target', alpha=0.3, s=10)
+                            color='b', label='Target', alpha=0.15, s=6)
 
     #  Notice: The mapped data by FOT
-    plot_functions(ax3, X_test, GFOT_f_shp_list, "FOT", "orange", 0.9, linewidth=3)
+    plot_functions(ax3, X_test, GFOT_f_shp_list, "FOT", "darkorange", 0.9, linewidth=3)
     # notice: The mapped data by GPOT
-    plot_functions(ax3, X_test, GPOT_f_shp_list, "GPOT", "lime", 0.4)
+    # plot_functions(ax3, X_test, GPOT_f_shp_list, "GPOT", "lime", 0.4)
 
     # Notice: Visualize the learned kernel
-    diag = np.sqrt(np.diag(K_1))
-    diag2 = np.sqrt(np.diag(K_2))
-    # plt.plot(X_test, mu_1, c='r', label='Mean')
-    ax3.fill_between(X_test[:, 0], (mu_1 + diag**0.5)[:, 0], (mu_1 - diag**0.5)[:, 0], alpha=0.2, color='pink')
 
-    # plt.plot(X_test, mu_2, c='b', label='Mean')
-    ax3.fill_between(X_test[:, 0], (mu_2 + diag2**0.5)[:, 0], (mu_2 - diag2**0.5)[:, 0], alpha=0.2, color='aqua')
     ax3.set_xlim([plot_x_low, plot_x_high])
     ax3.set_ylim([plot_y_low, plot_y_high])
     ax3.legend()
+    ax3.set_xticks([])
+    ax3.set_yticks([])
+
+    ax4 = figure_first.add_subplot(gs[0, 7:9])
+    ax4.imshow(Pi)
+    ax4.set_xticks([])
+    ax4.set_yticks([])
+    ax4.set_title(r"Coupling: $\Pi$")
+    # ax4.colorbar()
+
+    ax5 = figure_first.add_subplot(gs[0, 9:11])
+    ax5.imshow(A_mat)
+    ax5.set_xticks([])
+    ax5.set_yticks([])
+    ax5.set_title(r"$\Lambda$ matrix")
+    # ax5.colorbar()
+    plt.tight_layout(pad=0.1)
 
     # Notice: Visualize the Pi
-    fig_m = plt.figure(10)
-    plt.imshow(Pi)
-    plt.colorbar()
+    # fig_m = plt.figure(10)
+    # plt.imshow(Pi)
+    # plt.colorbar()
+    # plt.savefig("ToyExp_viz_matrix_figures/ToyExp_viz_mat_1.png", dpi=600)
     plt.show()
-
 
 
 
