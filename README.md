@@ -68,7 +68,7 @@ python3 FOT_toy_example_03.py
 
 ## Acknowledgements
 
-This repo
+This repo adopted the following packages as benchmarks
 
 * https://github.com/vivienseguy/Large-Scale-OT
 
