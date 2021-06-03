@@ -7,6 +7,128 @@ jzhu4@andrew.cmu.edu
 """
 from matplotlib import pyplot as plt
 import numpy as np
+import orthopy
+import itertools
+
+
+# Notice: Generate Mixtures of Sine functions, 1D functions
+def Generate_Continuous_Sine_Mixture(mix_center_list, mix_var_list,
+                          sine_scale_list, sine_scale_var_list,
+                          sine_amp_list, sine_amp_var_list,
+                          sine_shift_list, sine_shift_var_list,
+                          x_list, traj_num, mix_type='normal'):
+    # Notice: Generate center
+    if mix_type not in ['normal', 'uniform']:
+        print("mix_type mus be 'normal' or 'uniform'. Changed to 'normal'. ")
+        return [], []
+    center_index_list = np.random.choice(len(mix_center_list), traj_num)
+    print('center_index_list =', center_index_list)
+
+    func_mean_list = []
+    for center_index in center_index_list:
+
+        if mix_type == 'normal':
+            func_mean = np.random.normal(loc=mix_center_list[center_index],
+                                         scale=mix_var_list[center_index])
+        elif mix_type == 'uniform':
+            low_temp = mix_center_list[center_index] - mix_var_list[center_index]
+            high_temp = mix_center_list[center_index] + mix_var_list[center_index]
+            func_mean = np.random.uniform(low=low_temp, high=high_temp)
+        func_mean_list.append(func_mean)
+
+    y_list = []
+    y_mean_list = []
+    x_data_list = []
+    for j, func_mean in enumerate(func_mean_list):
+        i = center_index_list[j]
+        scale = np.random.normal(loc=sine_scale_list[i],scale=sine_scale_var_list[i])
+        amp = np.random.normal(loc=sine_amp_list[i],scale=sine_amp_var_list[i])
+        shift = np.random.normal(loc=sine_shift_list[i],scale=sine_shift_var_list[i])
+        y = amp * np.sin(scale * x_list[j] + shift) + func_mean
+        y_list.append(y)
+        y_mean_list.append(np.mean(y))
+        x_data_list.append(x_list[j])
+
+    y_sorted = [y for _, y in sorted(zip(y_mean_list, y_list), reverse=True)]
+    x_sorted = [x for _, x in sorted(zip(y_mean_list, x_data_list), reverse=True)]
+    return y_sorted, x_sorted
+
+
+# Notice: Generate a list of (different) index
+def Generate_index_set(curve_num,
+                       x_start_mu, x_end_mu, start_end_var,
+                       index_num_mu, index_num_var,
+                       pert_var):
+
+    x_list = []
+    for i in range(curve_num):
+        x_start = np.random.normal(loc=x_start_mu, scale=start_end_var)
+        x_end = np.random.normal(loc=x_end_mu, scale=start_end_var)
+        index_num = int(np.random.normal(loc=index_num_mu, scale=index_num_var))
+        x_for_pert = np.linspace(x_start, x_end, index_num).reshape(-1, 1)
+        x_for_sort = x_for_pert + np.random.normal(loc=0, scale=pert_var, size=(index_num, 1))
+        x_for_sort.sort()
+        # print("x =", x_for_sort)
+        x_list.append(x_for_sort)
+
+    return x_list
+
+
+def plot_origin_domain_data_line(plt, x_list, data_list, marker, color, label,
+                                 alpha=0.5, linewidth=5, markersize=12):
+    for i, data in enumerate(data_list):
+        if i == 0:
+            plt.plot(x_list[i], data, marker=marker, c=color, label=label,
+                     alpha=alpha, linewidth=linewidth, markersize=markersize)
+        else:
+            plt.plot(x_list[i], data, marker=marker, c=color, alpha=alpha,
+                     linewidth=linewidth, markersize=markersize)
+
+
+# Notice: the prototype of the Eigenfunction class
+#   @ Learning Integral Representations of GP
+class Eigenfunction_class():
+    def __init__(self, poly_num, a, b, c, coe=2, **kwargs):
+        self.poly_num = poly_num
+        self.a = a
+        self.b = b
+        self.c = c
+        self.coe = coe
+
+    def evaluate_eigen_mat(self, x_np):
+        """
+        :param x_np: Should be (x_num, 1)   (number of index points, x dimension)
+        :return:
+        """
+        assert x_np.shape[1] == 1
+
+        x_for_h = x_np * np.sqrt(2 * self.c)
+
+        exp_vec = np.exp( - (self.c - self.a) * np.square(x_np))
+
+        # print("exp_vec.shape =", exp_vec.shape)
+
+        self.poly_evaluator = orthopy.e1r2.Eval(x_for_h,
+                          standardization="probabilists",  # "physicists", "probabilists"
+                          scaling="normal")
+        vec_list = []
+        # c = 1
+        for var in itertools.islice(self.poly_evaluator, self.poly_num):
+            # print("var.shape =", var.shape)
+            vec_list.append(np.multiply(var, exp_vec))
+
+        vec_mat = np.asarray(vec_list).T
+        vec_output = np.squeeze(vec_mat) / self.coe
+        return vec_output
+
+    def evaluate_mat_list(self, X_list):
+        # Notice: Get the U and V list here !!!
+        mat_list = []
+        for i in range(len(X_list)):
+            x_l = X_list[i]
+            mat_list.append(self.evaluate_eigen_mat(x_l))
+
+        return mat_list
 
 
 # Notice: The Sinkhorn solver
@@ -59,14 +181,14 @@ def plot_origin_domain_data_scatter(plt, x, data_list, marker, color, label, alp
             plt.scatter(x, data, marker=marker, c=color, alpha=alpha, s=s)
 
 
-def plot_origin_domain_data_line(plt, x, data_list, marker, color, label,
+def plot_origin_domain_data_line(plt, x_list, data_list, marker, color, label,
                                  alpha=0.5, linewidth=5, markersize=12):
     for i, data in enumerate(data_list):
         if i == 0:
-            plt.plot(x, data, marker=marker, c=color, label=label,
+            plt.plot(x_list[i], data, marker=marker, c=color, label=label,
                      alpha=alpha, linewidth=linewidth, markersize=markersize)
         else:
-            plt.plot(x, data, marker=marker, c=color, alpha=alpha,
+            plt.plot(x_list[i], data, marker=marker, c=color, alpha=alpha,
                      linewidth=linewidth, markersize=markersize)
 
 
