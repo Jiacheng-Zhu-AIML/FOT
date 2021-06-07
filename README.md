@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/VersElectronics/FOT/master/files/swiss_roll.gif" height="240" width="1000">
 
 This repository contains the codebase accompaning the 
-paper ["Functional Optimal Transport: Mapping Estimation and Domain Adaptation for Functional data"](https://arxiv.org/abs/2102.03895).
+paper ["Functional Optimal Transport: Map Estimation and Domain Adaptation for Functional data"](https://arxiv.org/abs/2102.03895).
 
 
 ## Getting Started
